@@ -1,0 +1,20 @@
+{
+  "@context": "http://iiif.io/api/image/2/context.json",
+  "@id": "",
+  "protocol": "http://iiif.io/api/image",
+  "width": null,
+  "height": null,
+  "sizes": [],
+  "tiles": [
+    {
+      "width": 512,
+      "height": 512,
+      "scaleFactors": []
+    }
+  ],
+  "profile": ["http://iiif.io/api/image/2/level2.json", {
+    "formats": [],
+    "qualities": [],
+    "supports": ["regionByPx", "sizeByW", "sizeByWhListed", "cors", "regionSquare", "sizeByDistortedWh", "sizeAboveFull", "canonicalLinkHeader", "sizeByConfinedWh", "sizeByPct", "jsonldMediaType", "regionByPct", "rotationArbitrary", "sizeByH", "baseUriRedirect", "rotationBy90s", "profileLinkHeader", "sizeByForcedWh", "sizeByWh", "mirroring"]
+  }]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "iiif-lambda",
+  "version": "0.0.1",
+  "description": "IIIF Server in a Lambda",
+  "main": "index.js",
+  "repository": "https://github.com/mbklein/iiif-lambda.git",
+  "author": "Michael B. Klein",
+  "license": "Apache2",
+  "dependencies": {
+    "aws-sdk": "^2.368.0",
+    "probe-image-size": "^4.0.0",
+    "mime-types":"^2.1.21",
+    "sharp": "file:../sharp"
+  }
+}
