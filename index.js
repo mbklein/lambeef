@@ -1,5 +1,5 @@
 const iiif = require('./lib/iiif');
-const fs = require('fs');
+const fs   = require('fs');
 
 function handler(event, context, callback) {
   var scheme = event.headers['X-Forwarded-Proto'] || 'http';
@@ -10,16 +10,30 @@ function handler(event, context, callback) {
   var resource = new iiif(uri);
   resource.execute()
     .then(result => {
-      callback(null, {
+      var response = {
         statusCode: 200,
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Content-Type': result.contentType
         },
-        body: result.body
-      });
+        isBase64Encoded: /^image\//.test(result.contentType)
+      };
+      if (response.isBase64Encoded) {
+        response.body = result.body.toString('base64');
+      } else {
+        response.body = result.body;
+      }
+      callback(null, response);
     })
-    .catch(err => callback(err, null));
+    .catch(err => {
+      if (err instanceof resource.errorClass) {
+        callback(null, {
+          statusCode: 400,
+          body: err.toString()
+        });
+      }
+      callback(err, null)
+    });
 }
 
 function test(url, outFile) {
@@ -36,4 +50,7 @@ function test(url, outFile) {
     .catch(err => { throw err });
 }
 
-module.exports = test;
+module.exports = {
+  test,
+  handler
+};
