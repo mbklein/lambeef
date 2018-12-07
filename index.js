@@ -26,6 +26,12 @@ function handler(event, context, callback) {
       callback(null, response);
     })
     .catch(err => {
+      if (err.statusCode) {
+        callback(null, {
+          statusCode: err.statusCode,
+          body: err.message
+        })
+      }
       if (err instanceof resource.errorClass) {
         callback(null, {
           statusCode: 400,
