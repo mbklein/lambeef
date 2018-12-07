@@ -1,5 +1,17 @@
-const iiif = require('./lib/iiif');
+const AWS  = require('aws-sdk');
+const IIIF = require('iiif');
 const fs   = require('fs');
+
+const tiffBucket  = process.env.tiff_bucket;
+
+function s3Object(id) {
+  var s3 = new AWS.S3();
+  var path = id.match(/.{1,2}/g).join('/');
+  return s3.getObject({ 
+    Bucket: tiffBucket, 
+    Key: `${path}-pyramid.tif`, 
+  }).createReadStream();
+}
 
 function handler(event, context, callback) {
   var scheme = event.headers['X-Forwarded-Proto'] || 'http';
@@ -7,7 +19,7 @@ function handler(event, context, callback) {
   var path = event.path;
   var uri = `${scheme}://${host}${path}`;
   console.log(`GET ${uri}`)
-  var resource = new iiif(uri);
+  var resource = new IIIF.Processor(uri, id => s3Object(id));
   resource.execute()
     .then(result => {
       var response = {
@@ -43,7 +55,7 @@ function handler(event, context, callback) {
 }
 
 function test(url, outFile) {
-  var resource = new iiif(url);
+  var resource = new IIIF.Processor(url, id => s3Object(id));
   return resource.execute()
     .then(result => {
       if (outFile == null) {

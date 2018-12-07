@@ -8,8 +8,6 @@
   "license": "Apache2",
   "dependencies": {
     "aws-sdk": "^2.368.0",
-    "probe-image-size": "^4.0.0",
-    "mime-types":"^2.1.21",
-    "sharp": "file:../sharp"
+    "iiif": "mbklein/node-iiif"
   }
 }
