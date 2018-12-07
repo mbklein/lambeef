@@ -17,7 +17,8 @@ function handler(event, context, callback) {
   var scheme = event.headers['X-Forwarded-Proto'] || 'http';
   var host = event.headers['Host'];
   var path = event.path;
-  var uri = `${scheme}://${host}${path}`;
+  var stage = event.requestContext.stage;
+  var uri = `${scheme}://${host}/${stage}${path}`;
   console.log(`GET ${uri}`)
   var resource = new IIIF.Processor(uri, id => s3Object(id));
   resource.execute()
