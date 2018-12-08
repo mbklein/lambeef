@@ -16,7 +16,7 @@ function s3Object(id) {
 function handler(event, context, callback) {
   var scheme = event.headers['X-Forwarded-Proto'] || 'http';
   var host = event.headers['Host'];
-  var path = event.path;
+  var path = event.path.replace(/%2f/gi, '');
   var stage = event.requestContext.stage;
   var uri = `${scheme}://${host}/${stage}${path}`;
   console.log(`GET ${uri}`)
