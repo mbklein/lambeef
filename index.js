@@ -1,8 +1,14 @@
-const AWS  = require('aws-sdk');
-const IIIF = require('iiif');
-const fs   = require('fs');
+const AWS        = require('aws-sdk');
+const IIIF       = require('iiif');
+const authorize  = require('./lib/authorize');
+const middy      = require('middy');
+const MiddleAuth = require('./lib/middle_auth');
+const { 
+  cors,
+  httpHeaderNormalizer
+} = require('middy/middlewares');
 
-const tiffBucket  = process.env.tiff_bucket;
+const tiffBucket     = process.env.tiff_bucket;
 
 function s3Object(id) {
   var s3 = new AWS.S3();
@@ -13,7 +19,21 @@ function s3Object(id) {
   }).createReadStream();
 }
 
-function handler(event, context, callback) {
+function makeResponse(code, type, body) {
+  var response = {
+    statusCode: code,
+    isBase64Encoded: /^image\//.test(type)
+  };
+  if (response.isBase64Encoded) {
+    response.body = body.toString('base64');
+  } else {
+    response.body = body;
+  }
+  console.log(response);
+  return response;
+}
+
+function makeResource(event) {
   var scheme = event.headers['X-Forwarded-Proto'] || 'http';
   var host = event.headers['Host'];
   var path = event.path.replace(/%2f/gi, '');
@@ -21,57 +41,52 @@ function handler(event, context, callback) {
     path = '/' + event.requestContext.stage + path;
   }
   var uri = `${scheme}://${host}${path}`;
-  console.log(`GET ${uri}`)
-  var resource = new IIIF.Processor(uri, id => s3Object(id));
-  resource.execute()
-    .then(result => {
-      var response = {
-        statusCode: 200,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': result.contentType
-        },
-        isBase64Encoded: /^image\//.test(result.contentType)
-      };
-      if (response.isBase64Encoded) {
-        response.body = result.body.toString('base64');
-      } else {
-        response.body = result.body;
-      }
-      callback(null, response);
-    })
-    .catch(err => {
-      if (err.statusCode) {
-        callback(null, {
-          statusCode: err.statusCode,
-          body: err.message
-        })
-      }
-      if (err instanceof resource.errorClass) {
-        callback(null, {
-          statusCode: 400,
-          body: err.toString()
-        });
-      }
-      callback(err, null)
-    });
+
+  return new IIIF.Processor(uri, id => s3Object(id));
 }
 
-function test(url, outFile) {
-  var resource = new IIIF.Processor(url, id => s3Object(id));
-  return resource.execute()
-    .then(result => {
-      if (outFile == null) {
-        outFile = url.split('/').pop();
-      }
-      var stream = fs.createWriteStream(outFile);
-      stream.write(result.body);
-      stream.end();
+function processRequest(event, _context, callback) {
+  if (event.httpMethod == 'OPTIONS') {
+    callback(null, '');
+    return true;
+  }
+
+  var resource = makeResource(event);
+  authorize(event.headers, resource.id)
+    .then(authed => {
+        if (authed) {
+          resource.execute()
+            .then(result => {
+              var response = { 
+                statusCode: 200, 
+                headers: { 'Content-Type': result.contentType }, 
+                isBase64Encoded: /^image\//.test(type)
+              };
+              if (response.isBase64Encoded) {
+                response.body = result.body.toString('base64');
+              } else {
+                response.body = result.body;
+              }
+              callback(null, response);
+            })
+            .catch(err => {
+              if (err.statusCode) {
+                callback(null, { statusCode: err.statusCode, body: 'text/plain' });
+              } else if (err instanceof resource.errorClass) {
+                callback(null, { statusCode: 400, body: err.toString() });
+              } else {
+                callback(err, null);
+              }
+            });
+        } else {
+          callback(null, { statusCode: 403, body: 'Unauthorized' });
+        }
     })
-    .catch(err => { throw err });
 }
 
 module.exports = {
-  test,
-  handler
+  handler: middy(processRequest)
+            .use(httpHeaderNormalizer)
+            .use(cors({ headers: 'Authorization', credentials: true }))
+            .use(MiddleAuth)
 };
