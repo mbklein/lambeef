@@ -1,6 +1,7 @@
 const AWS        = require('aws-sdk');
 const IIIF       = require('iiif');
 const authorize  = require('./lib/authorize');
+const isString   = require('lodash.isstring');
 const middy      = require('middy');
 const MiddleAuth = require('./lib/middle_auth');
 const { 
@@ -19,20 +20,6 @@ function s3Object(id) {
   }).createReadStream();
 }
 
-function makeResponse(code, type, body) {
-  var response = {
-    statusCode: code,
-    isBase64Encoded: /^image\//.test(type)
-  };
-  if (response.isBase64Encoded) {
-    response.body = body.toString('base64');
-  } else {
-    response.body = body;
-  }
-  console.log(response);
-  return response;
-}
-
 function makeResource(event) {
   var scheme = event.headers['X-Forwarded-Proto'] || 'http';
   var host = event.headers['Host'];
@@ -46,47 +33,47 @@ function makeResource(event) {
 }
 
 function processRequest(event, _context, callback) {
-  if (event.httpMethod == 'OPTIONS') {
-    callback(null, '');
-    return true;
+  if (event.httpMethod == 'OPTIONS' || event.path == '/iiif/login') {
+    callback(null, { statusCode: 204, body: null });
+  } else {
+    var authToken = isString(event.headers.Authorization) ? event.headers.Authorization.replace(/^Bearer /,'') : null;
+    var resource = makeResource(event);
+    authorize(authToken, resource.id)
+      .then(authed => {
+          if (resource.filename == 'info.json' || authed) {
+            resource.execute()
+              .then(result => {
+                var response = { 
+                  statusCode: 200, 
+                  headers: { 'Content-Type': result.contentType }, 
+                  isBase64Encoded: /^image\//.test(result.contentType)
+                };
+                if (response.isBase64Encoded) {
+                  response.body = result.body.toString('base64');
+                } else {
+                  response.body = result.body;
+                }
+                callback(null, response);
+              })
+              .catch(err => {
+                if (err.statusCode) {
+                  callback(null, { statusCode: err.statusCode, body: 'text/plain' });
+                } else if (err instanceof resource.errorClass) {
+                  callback(null, { statusCode: 400, body: err.toString() });
+                } else {
+                  callback(err, null);
+                }
+              });
+          } else {
+            callback(null, { statusCode: 403, body: 'Unauthorized' });
+          }
+      })
   }
-
-  var resource = makeResource(event);
-  authorize(event.headers, resource.id)
-    .then(authed => {
-        if (authed) {
-          resource.execute()
-            .then(result => {
-              var response = { 
-                statusCode: 200, 
-                headers: { 'Content-Type': result.contentType }, 
-                isBase64Encoded: /^image\//.test(type)
-              };
-              if (response.isBase64Encoded) {
-                response.body = result.body.toString('base64');
-              } else {
-                response.body = result.body;
-              }
-              callback(null, response);
-            })
-            .catch(err => {
-              if (err.statusCode) {
-                callback(null, { statusCode: err.statusCode, body: 'text/plain' });
-              } else if (err instanceof resource.errorClass) {
-                callback(null, { statusCode: 400, body: err.toString() });
-              } else {
-                callback(err, null);
-              }
-            });
-        } else {
-          callback(null, { statusCode: 403, body: 'Unauthorized' });
-        }
-    })
 }
 
 module.exports = {
   handler: middy(processRequest)
-            .use(httpHeaderNormalizer)
-            .use(cors({ headers: 'Authorization', credentials: true }))
+            .use(httpHeaderNormalizer())
+            .use(cors({ headers: 'Authorization, Cookie', credentials: true }))
             .use(MiddleAuth)
 };
